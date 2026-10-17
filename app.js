@@ -3,8 +3,9 @@
  const $=id=>document.getElementById(id),status=$('status');
  try{
  const [base,data]=await Promise.all(['basemap.geojson','route.json'].map(async p=>{const r=await fetch(p);if(!r.ok)throw Error(p);return r.json()}));
+ const meta=data.meta;
  const route=data.coordinates.map(([lng,lat])=>[lat,lng]),cum=data.cumulativeMeters,total=cum.at(-1),turn=cum[data.turnIndex];
- const map=L.map('map',{zoomControl:false,minZoom:14,maxZoom:18,maxBounds:[[35.162,129.107],[35.195,129.137]],maxBoundsViscosity:.8,preferCanvas:true}).setView([35.176,129.122],15);
+ const map=L.map('map',{zoomControl:false,zoomSnap:0.1,minZoom:14,maxZoom:18,maxBounds:meta.bounds,maxBoundsViscosity:.8,preferCanvas:true}).setView(meta.center,15);
  L.control.zoom({position:'bottomright'}).addTo(map);
  map.attributionControl.setPrefix('<a href="https://leafletjs.com">Leaflet</a>');
  map.attributionControl.addAttribution('© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a> · ODbL');
@@ -15,10 +16,10 @@
  const passed=L.polyline([],{color:'#fff',weight:1.8,dashArray:'2 8',opacity:.95,interactive:false}).addTo(map);
  const runner=L.marker(route[0],{icon:L.divIcon({className:'',html:'<div class="runner"><span>↑</span></div>',iconSize:[28,28],iconAnchor:[14,14]}),zIndexOffset:1000,interactive:false}).addTo(map);
  function label(ll,text){L.marker(ll,{icon:L.divIcon({className:'place-label',html:text,iconSize:[120,20]}),interactive:false}).addTo(map)}
- label([35.1715,129.1278],'APEC 나루공원');label([35.1735,129.1263],'영화의전당');label([35.178,129.1175],'수 영 강');label([35.1849,129.115],'과정교');label([35.1743,129.1192],'좌수영교');
+ meta.labels.forEach(([ll,text])=>label(ll,text));
  const stops={start:0,bridge:data.bridgeIndex,turn:data.turnIndex};
  for(const [key,i] of Object.entries(stops)){
-  const title={start:'01 출발 · 도착',bridge:'02 좌수영교 부근',turn:'03 반환'}[key];
+  const title={start:'01 출발 · 도착',bridge:'02 중간 지점',turn:'03 반환'}[key];
   L.circleMarker(route[i],{radius:5,color:'#111',weight:2,fillColor:'#fff',fillOpacity:1}).addTo(map).bindTooltip(title,{permanent:true,direction:key==='turn'?'right':'left',offset:[key==='turn'?10:-10,0],className:'point-label'}).on('click',()=>seek(cum[i]));
  }
  const bounds=line.getBounds();
@@ -30,7 +31,7 @@
   const a=route[i-1],b=route[i];const deg=Math.atan2((b[1]-a[1])*Math.cos(ll[0]*Math.PI/180),b[0]-a[0])*180/Math.PI;
   runner.getElement().querySelector('span').style.transform=`rotate(${deg}deg)`;
   $('distance').textContent=(at/1000).toFixed(2);$('progress').value=Math.round(at/total*1000);
-  $('phase').textContent=at>=total-1?'출발점에 돌아왔어요':Math.abs(at-turn)<25?'과정교 부근 · 여기서 돌아와요':at>turn?'돌아오는 길 · 나루공원으로':at<1?'출발할 준비':'가는 길 · 과정교 방향';
+  $('phase').textContent=at>=total-1?'출발점에 돌아왔어요':Math.abs(at-turn)<25?meta.stops[2]+' · 여기서 돌아와요':at>turn?'돌아오는 길 · 출발점으로':at<1?'출발할 준비':'가는 길 · 반환점 방향';
   $('progress').setAttribute('aria-valuetext',`${(at/1000).toFixed(2)}킬로미터, ${$('phase').textContent}`);
  }
  function pause(){playing=false;last=null;$('play').textContent=at>=total?'↺ 다시 재생':'▶ 경로 재생';$('map-play').textContent=at>=total?'↺ 다시':'▶ 재생'}
@@ -63,10 +64,11 @@
    map.setView(ll,16,{animate:false});status.textContent=`현재 위치를 표시했어요. 위치 정확도 약 ${Math.round(p.coords.accuracy)}m · 한 번 확인한 위치이며 자동으로 갱신되지 않아요.`;
   },e=>{status.textContent=e.code===1?'위치 권한이 꺼져 있어요. 경로 재생은 계속 사용할 수 있어요.':'현재 위치를 확인하지 못했어요. 잠시 뒤 다시 눌러 주세요.'},{enableHighAccuracy:true,timeout:12000,maximumAge:10000})
  };
- $('copy').onclick=async()=>{try{await navigator.clipboard.writeText('https://codingspecialist.github.io/busan-running-map/');$('copy').textContent='복사했어요 ✓'}catch{status.textContent='주소창의 링크를 복사해 주세요.'}};
+ $('copy').onclick=async()=>{try{await navigator.clipboard.writeText(meta.url);$('copy').textContent='복사했어요 ✓'}catch{status.textContent='주소창의 링크를 복사해 주세요.'}};
  status.textContent='지도를 준비했어요. 재생 버튼을 눌러 길을 따라가 보세요.';
  window.sample={map,data,seek,get progress(){return at},get playing(){return playing}};
  new ResizeObserver(()=>{map.invalidateSize();if(!$('follow').checked)fit()}).observe($('map'));
  }catch(e){console.error(e);status.textContent='지도를 불러오지 못했어요. 인터넷 연결을 확인하고 새로고침해 주세요.';$('play').textContent='불러오기 실패'}
 })();
+
 
